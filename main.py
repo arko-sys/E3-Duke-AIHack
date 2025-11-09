@@ -1,5 +1,4 @@
 import streamlit as st
-from streamlit_chat import message
 from timeit import default_timer as timer
 from langchain_community.graphs import Neo4jGraph
 from langchain_community.chains.graph_qa.cypher import GraphCypherQAChain
@@ -128,7 +127,7 @@ def extract_cypher(text: str) -> str:
     return text
 
 # ==============================================================
-# Query Function (Final stable version)
+# Query Function
 # ==============================================================
 def query_graph(user_input):
     """Main LLM → Cypher → Neo4j → Answer flow with fallback safety."""
@@ -138,13 +137,11 @@ def query_graph(user_input):
             username=neo4j_user,
             password=neo4j_password,
         )
-        # Some builds expose .get_schema as a string, others as a function.
         schema_text = schema_graph.get_schema if isinstance(schema_graph.get_schema, str) else schema_graph.get_schema()
     except Exception as e:
         st.warning(f"⚠️ Could not fetch live schema: {e}")
         schema_text = ""
 
-    # New graph instance for querying
     graph = Neo4jGraph(url=neo4j_url, username=neo4j_user, password=neo4j_password)
 
     chain = GraphCypherQAChain.from_llm(
@@ -158,16 +155,11 @@ def query_graph(user_input):
     )
 
     try:
-        # Inject schema dynamically
         result = chain({"query": user_input, "schema": schema_text})
-
         intermediate_steps = result.get("intermediate_steps", [])
         if intermediate_steps:
-            # Normalize quotes
             if "query" in intermediate_steps[0]:
                 intermediate_steps[0]["query"] = normalize_quotes(intermediate_steps[0]["query"])
-
-            # Pretty-format JSON-like context
             if len(intermediate_steps) > 1:
                 raw_ctx = intermediate_steps[1].get("context", "")
                 if isinstance(raw_ctx, (list, dict)):
@@ -178,21 +170,15 @@ def query_graph(user_input):
                         intermediate_steps[1]["context"] = json.dumps(parsed, indent=2)
                     except Exception:
                         pass
-
         return result
 
     except Exception as e:
         st.warning("⚠️ Retrying with strict Cypher mode due to syntax issue...")
-
-        # Generate stricter Cypher using fallback prompt
         strict_text = llm.invoke(
             STRICT_CYPHER_PROMPT.format(schema=schema_text, question=user_input)
         ).content
-
         safe_cypher = extract_cypher(strict_text)
         safe_cypher = normalize_quotes(safe_cypher)
-
-        # Execute directly
         try:
             rows = graph.query(safe_cypher)
         except Exception as inner_e:
@@ -200,11 +186,8 @@ def query_graph(user_input):
                 "result": f"Execution failed even after strict mode. Error: {inner_e}",
                 "intermediate_steps": [{"query": safe_cypher}, {"context": "[]"}],
             }
-
-        # Generate human summary
         ctx_str = json.dumps(rows, indent=2) if isinstance(rows, (list, dict)) else str(rows)
         answer = llm.invoke(qa_prompt.format(context=ctx_str, question=user_input)).content
-
         return {
             "result": answer,
             "intermediate_steps": [
@@ -241,7 +224,6 @@ def render_sidebar():
             st.subheader("🗄️ Database Results")
             st.text_area("Results", st.session_state.database_results, height=220)
 
-# initial render
 render_sidebar()
 
 # ==============================================================
@@ -259,10 +241,7 @@ if user_input:
     with st.spinner("Processing your question..."):
         st.session_state.user_msgs.append(user_input)
         start = timer()
-
-        cypher_query = ""
-        database_results = ""
-        answer = ""
+        cypher_query, database_results, answer = "", "", ""
 
         try:
             result = query_graph(user_input)
@@ -279,8 +258,6 @@ if user_input:
             st.exception(e)
 
     st.write(f"⏱ Time taken: {timer() - start:.2f}s")
-
-    # ✅ re-render sidebar immediately with latest query results
     render_sidebar()
 
 # ==============================================================
@@ -289,6 +266,34 @@ if user_input:
 st.subheader("💬 Conversation")
 
 for i in range(len(st.session_state.user_msgs)):
-    message(st.session_state.user_msgs[i], is_user=True, key=f"user_{i}")
-    if i < len(st.session_state.system_msgs):
-        message(st.session_state.system_msgs[i], key=f"assistant_{i}")
+    user_text = st.session_state.user_msgs[i]
+    assistant_text = st.session_state.system_msgs[i] if i < len(st.session_state.system_msgs) else ""
+
+    # ✅ User message (green bubble, auto width)
+    st.markdown(
+        f"""
+        <div style='display:flex;justify-content:flex-end;margin-bottom:10px;'>
+            <div style='background-color:#1f5130;color:white;border-radius:14px;
+                        padding:10px 15px;max-width:75%;width:fit-content;
+                        word-wrap:break-word;font-size:15px;line-height:1.4;'>
+                {user_text}
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    # ✅ Assistant message (white/gray bubble, auto width)
+    if assistant_text:
+        st.markdown(
+            f"""
+            <div style='display:flex;justify-content:flex-start;margin-bottom:10px;'>
+                <div style='background-color:#2b2b2b;color:#f5f5f5;border-radius:14px;
+                            padding:10px 15px;max-width:75%;width:fit-content;
+                            word-wrap:break-word;font-size:15px;line-height:1.4;'>
+                    {assistant_text}
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
