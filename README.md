@@ -31,11 +31,15 @@ Users can ask questions like:
 ### 3. 💬 **Streamlit UI**  
 - Simple chat interface to ask enterprise questions.  
 - **Color-coded chat bubbles** (green = user, white = assistant).  
-- **Sidebar transparency**: executed Cypher query + raw database results.  
+- **Sidebar transparency**: executed Cypher query + raw database results.
+- <img width="2549" height="1117" alt="image" src="https://github.com/user-attachments/assets/797b41f2-0fae-4e9f-93cd-c176ce007d69" />
+
 
 ### 4. 🔗 **Neo4j-Backed Knowledge Graph**  
 - Stores projects, technologies, clients, and people with rich metadata.  
 - Enables semantic navigation through enterprise knowledge — not just keyword search.
+- <img width="2549" height="1286" alt="image" src="https://github.com/user-attachments/assets/3d4d8523-07ea-41d2-b2f6-ec4d80dcb372" />
+
 
 ---
 
